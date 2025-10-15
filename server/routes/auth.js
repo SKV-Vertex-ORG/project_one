@@ -54,20 +54,24 @@ router.post('/send-otp', [
     // Send OTP email (with fallback for development)
     let emailResult = { success: true };
     
-    // Try to send email (will be skipped if not configured)
+    // Try to send email
     emailResult = await emailService.sendOtpEmail(email, otp);
     
     if (!emailResult.success) {
-      console.log('📧 Email service not configured, OTP generated but not sent');
+      console.log('📧 Email sending failed:', emailResult.error);
       console.log('🔐 Generated OTP for', email, ':', otp);
+      console.log('⚠️  OTP will be included in response for manual verification');
+    } else {
+      console.log('✅ Email sent successfully');
     }
 
     res.json({
-      message: 'OTP sent successfully',
+      message: emailResult.success ? 'OTP sent successfully via email' : 'OTP generated successfully',
       email: email,
       expiresIn: '10 minutes',
-      // Include OTP in response for testing (since email is disabled)
-      otp: otp
+      // Include OTP in response only if email failed
+      otp: emailResult.success ? undefined : otp,
+      emailSent: emailResult.success
     });
 
   } catch (error) {

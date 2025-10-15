@@ -6,28 +6,27 @@ class EmailService {
   }
 
   createTransporter() {
-    // Temporarily disable email service to avoid timeout issues
-    console.log('📧 Email service temporarily disabled to avoid timeout issues');
-    return null;
-    
     // Check if email service is configured
     if (!process.env.GMAIL_USER || !process.env.GMAIL_PASS) {
       console.log('📧 Email service not configured, returning null transporter');
       return null;
     }
 
-    return nodemailer.createTransport({
-      service: 'gmail',
+    return nodemailer.createTransporter({
+      host: 'smtp.gmail.com',
+      port: 587,
+      secure: false, // true for 465, false for other ports
       auth: {
         user: process.env.GMAIL_USER,
         pass: process.env.GMAIL_PASS
       },
-      connectionTimeout: 10000, // 10 seconds
-      greetingTimeout: 10000,   // 10 seconds
-      socketTimeout: 10000,     // 10 seconds
-      pool: true,
-      maxConnections: 1,
-      maxMessages: 3
+      connectionTimeout: 30000, // 30 seconds
+      greetingTimeout: 30000,   // 30 seconds
+      socketTimeout: 30000,     // 30 seconds
+      pool: false, // Disable pooling for better reliability
+      tls: {
+        rejectUnauthorized: false
+      }
     });
   }
 
@@ -38,6 +37,10 @@ class EmailService {
         console.log('📧 Email service not configured, skipping email send');
         return { success: false, error: 'Email service not configured' };
       }
+
+      // Test connection first
+      await this.transporter.verify();
+      console.log('📧 Email service connection verified');
 
       const mailOptions = {
         from: {
@@ -54,6 +57,16 @@ class EmailService {
       return { success: true, messageId: result.messageId };
     } catch (error) {
       console.error('❌ Error sending OTP email:', error);
+      
+      // Provide more specific error messages
+      if (error.code === 'EAUTH') {
+        return { success: false, error: 'Authentication failed. Check Gmail credentials.' };
+      } else if (error.code === 'ETIMEDOUT') {
+        return { success: false, error: 'Connection timeout. Check network or try again.' };
+      } else if (error.code === 'ECONNECTION') {
+        return { success: false, error: 'Connection failed. Check internet connection.' };
+      }
+      
       return { success: false, error: error.message };
     }
   }
