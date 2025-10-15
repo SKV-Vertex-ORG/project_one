@@ -70,8 +70,8 @@ router.post('/send-otp', [
       message: 'OTP sent successfully',
       email: email,
       expiresIn: '10 minutes',
-      // Include OTP in response for testing (remove in production)
-      otp: process.env.NODE_ENV === 'development' ? otp : undefined
+      // Include OTP in response for testing (since email is disabled)
+      otp: otp
     });
 
   } catch (error) {
