@@ -14,16 +14,21 @@ const app = express();
 // Security middleware
 app.use(helmet());
 
-// CORS configuration for local development
+// CORS configuration for local development and production
 app.use(cors({
   origin: [
     'http://localhost:3000',
     'http://localhost:5173',
     'http://127.0.0.1:3000',
     'http://127.0.0.1:5173',
-    'https://vertex-app.vercel.app'
+    'https://vertexkv.netlify.app',
+    'https://vertexkv.netlify.app/',
+    'https://*.netlify.app'
   ],
-  credentials: true
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  optionsSuccessStatus: 200
 }));
 
 // Rate limiting
