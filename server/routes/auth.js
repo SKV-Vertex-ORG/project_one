@@ -54,14 +54,10 @@ router.post('/send-otp', [
     // Send OTP email (with fallback for development)
     let emailResult = { success: true };
     
-    if (process.env.GMAIL_USER && process.env.GMAIL_PASS) {
-      emailResult = await emailService.sendOtpEmail(email, otp);
-      
-      if (!emailResult.success) {
-        console.warn('Email service failed, but continuing with OTP generation:', emailResult.error);
-        // Don't fail the request, just log the error
-      }
-    } else {
+    // Try to send email (will be skipped if not configured)
+    emailResult = await emailService.sendOtpEmail(email, otp);
+    
+    if (!emailResult.success) {
       console.log('📧 Email service not configured, OTP generated but not sent');
       console.log('🔐 Generated OTP for', email, ':', otp);
     }
