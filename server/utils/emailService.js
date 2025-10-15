@@ -2,17 +2,39 @@ const nodemailer = require('nodemailer');
 
 class EmailService {
   constructor() {
-    this.transporter = nodemailer.createTransport({
+    this.transporter = this.createTransporter();
+  }
+
+  createTransporter() {
+    // Check if email service is configured
+    if (!process.env.GMAIL_USER || !process.env.GMAIL_PASS) {
+      console.log('📧 Email service not configured, returning null transporter');
+      return null;
+    }
+
+    return nodemailer.createTransport({
       service: 'gmail',
       auth: {
         user: process.env.GMAIL_USER,
         pass: process.env.GMAIL_PASS
-      }
+      },
+      connectionTimeout: 10000, // 10 seconds
+      greetingTimeout: 10000,   // 10 seconds
+      socketTimeout: 10000,     // 10 seconds
+      pool: true,
+      maxConnections: 1,
+      maxMessages: 3
     });
   }
 
   async sendOtpEmail(email, otp, userName = 'User') {
     try {
+      // Check if transporter is available
+      if (!this.transporter) {
+        console.log('📧 Email service not configured, skipping email send');
+        return { success: false, error: 'Email service not configured' };
+      }
+
       const mailOptions = {
         from: {
           name: 'Vertex App',

@@ -62,13 +62,16 @@ router.post('/send-otp', [
         // Don't fail the request, just log the error
       }
     } else {
-      console.log('Email service not configured, OTP generated but not sent:', otp);
+      console.log('📧 Email service not configured, OTP generated but not sent');
+      console.log('🔐 Generated OTP for', email, ':', otp);
     }
 
     res.json({
       message: 'OTP sent successfully',
       email: email,
-      expiresIn: '10 minutes'
+      expiresIn: '10 minutes',
+      // Include OTP in response for testing (remove in production)
+      otp: process.env.NODE_ENV === 'development' ? otp : undefined
     });
 
   } catch (error) {
