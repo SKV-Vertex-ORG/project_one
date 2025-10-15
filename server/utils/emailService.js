@@ -6,6 +6,10 @@ class EmailService {
   }
 
   createTransporter() {
+    // Temporarily disable email service to avoid timeout issues
+    console.log('📧 Email service temporarily disabled to avoid timeout issues');
+    return null;
+    
     // Check if email service is configured
     if (!process.env.GMAIL_USER || !process.env.GMAIL_PASS) {
       console.log('📧 Email service not configured, returning null transporter');
