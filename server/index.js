@@ -11,20 +11,46 @@ const groceryListRoutes = require('./routes/groceryList');
 
 const app = express();
 
+// Check required environment variables
+if (!process.env.JWT_SECRET) {
+  console.error('❌ JWT_SECRET environment variable is not set!');
+  process.exit(1);
+}
+
+console.log('🚀 Starting server with environment:', process.env.NODE_ENV || 'development');
+
 // Security middleware
 app.use(helmet());
 
 // CORS configuration for local development and production
+const allowedOrigins = [
+  'http://localhost:3000',
+  'http://localhost:5173',
+  'http://127.0.0.1:3000',
+  'http://127.0.0.1:5173',
+  'https://vertexkv.netlify.app',
+  'https://vertexkv.netlify.app/'
+];
+
 app.use(cors({
-  origin: [
-    'http://localhost:3000',
-    'http://localhost:5173',
-    'http://127.0.0.1:3000',
-    'http://127.0.0.1:5173',
-    'https://vertexkv.netlify.app',
-    'https://vertexkv.netlify.app/',
-    'https://*.netlify.app'
-  ],
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    
+    // Check if origin is in allowed list
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+    
+    // Allow Netlify subdomains
+    if (origin.match(/^https:\/\/.*\.netlify\.app$/)) {
+      return callback(null, true);
+    }
+    
+    
+    console.log('❌ CORS blocked origin:', origin);
+    return callback(new Error('Not allowed by CORS'));
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
@@ -44,12 +70,20 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
 // MongoDB connection
+if (!process.env.MONGODB_URI) {
+  console.error('❌ MONGODB_URI environment variable is not set!');
+  process.exit(1);
+}
+
 mongoose.connect(process.env.MONGODB_URI, {
   // useNewUrlParser: true,
   // useUnifiedTopology: true,
 })
 .then(() => console.log('✅ MongoDB connected successfully'))
-.catch(err => console.error('❌ MongoDB connection error:', err));
+.catch(err => {
+  console.error('❌ MongoDB connection error:', err);
+  process.exit(1);
+});
 
 // Routes
 app.use('/api/auth', authRoutes);
@@ -61,8 +95,15 @@ app.get('/api/health', (req, res) => {
   res.json({ 
     status: 'OK', 
     timestamp: new Date().toISOString(),
-    environment: process.env.NODE_ENV 
+    environment: process.env.NODE_ENV || 'development',
+    uptime: process.uptime(),
+    memory: process.memoryUsage()
   });
+});
+
+// Simple ping endpoint for basic connectivity
+app.get('/api/ping', (req, res) => {
+  res.json({ message: 'pong', timestamp: new Date().toISOString() });
 });
 
 // Error handling middleware
