@@ -12,25 +12,56 @@ class EmailService {
       return null;
     }
 
-    return nodemailer.createTransport({
-      host: 'smtp.gmail.com',
-      port: 587,
-      secure: false, // true for 465, false for other ports
-      auth: {
-        user: process.env.GMAIL_USER,
-        pass: process.env.GMAIL_PASS
+    // Try multiple SMTP configurations for better reliability
+    const smtpConfigs = [
+      {
+        host: 'smtp.gmail.com',
+        port: 587,
+        secure: false,
+        auth: {
+          user: process.env.GMAIL_USER,
+          pass: process.env.GMAIL_PASS
+        },
+        connectionTimeout: 60000,
+        greetingTimeout: 60000,
+        socketTimeout: 60000,
+        pool: false,
+        tls: {
+          rejectUnauthorized: false,
+          ciphers: 'SSLv3'
+        },
+        requireTLS: true,
+        debug: process.env.NODE_ENV === 'development',
+        logger: process.env.NODE_ENV === 'development'
       },
-      connectionTimeout: 30000, // 30 seconds
-      greetingTimeout: 30000,   // 30 seconds
-      socketTimeout: 30000,     // 30 seconds
-      pool: false, // Disable pooling for better reliability
-      tls: {
-        rejectUnauthorized: false
+      {
+        host: 'smtp.gmail.com',
+        port: 465,
+        secure: true,
+        auth: {
+          user: process.env.GMAIL_USER,
+          pass: process.env.GMAIL_PASS
+        },
+        connectionTimeout: 60000,
+        greetingTimeout: 60000,
+        socketTimeout: 60000,
+        pool: false,
+        tls: {
+          rejectUnauthorized: false
+        },
+        debug: process.env.NODE_ENV === 'development',
+        logger: process.env.NODE_ENV === 'development'
       }
-    });
+    ];
+
+    // Use the first configuration by default
+    return nodemailer.createTransport(smtpConfigs[0]);
   }
 
-  async sendOtpEmail(email, otp, userName = 'User') {
+  async sendOtpEmail(email, otp, userName = 'User', retryCount = 0) {
+    const maxRetries = 3;
+    const retryDelay = 2000; // 2 seconds
+
     try {
       // Check if transporter is available
       if (!this.transporter) {
@@ -38,8 +69,14 @@ class EmailService {
         return { success: false, error: 'Email service not configured' };
       }
 
-      // Test connection first
-      await this.transporter.verify();
+      // Test connection first (with timeout)
+      console.log(`📧 Testing email connection (attempt ${retryCount + 1}/${maxRetries + 1})...`);
+      await Promise.race([
+        this.transporter.verify(),
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Connection verification timeout')), 30000)
+        )
+      ]);
       console.log('📧 Email service connection verified');
 
       const mailOptions = {
@@ -56,15 +93,38 @@ class EmailService {
       console.log('✅ OTP email sent successfully:', result.messageId);
       return { success: true, messageId: result.messageId };
     } catch (error) {
-      console.error('❌ Error sending OTP email:', error);
+      console.error(`❌ Error sending OTP email (attempt ${retryCount + 1}):`, error);
+      
+      // Retry logic for connection timeouts and temporary failures
+      if (retryCount < maxRetries && (
+        error.code === 'ETIMEDOUT' || 
+        error.code === 'ECONNECTION' || 
+        error.code === 'ESOCKET' ||
+        error.message.includes('timeout') ||
+        error.message.includes('Connection verification timeout')
+      )) {
+        console.log(`🔄 Retrying email send in ${retryDelay}ms... (${retryCount + 1}/${maxRetries})`);
+        
+        // Try alternative SMTP configuration on retry
+        if (retryCount === 1) {
+          const altTransporter = this.createAlternativeTransporter(1);
+          if (altTransporter) {
+            this.transporter = altTransporter;
+            console.log('📧 Switched to alternative SMTP configuration');
+          }
+        }
+        
+        await new Promise(resolve => setTimeout(resolve, retryDelay));
+        return this.sendOtpEmail(email, otp, userName, retryCount + 1);
+      }
       
       // Provide more specific error messages
       if (error.code === 'EAUTH') {
         return { success: false, error: 'Authentication failed. Check Gmail credentials.' };
       } else if (error.code === 'ETIMEDOUT') {
-        return { success: false, error: 'Connection timeout. Check network or try again.' };
+        return { success: false, error: 'Connection timeout after multiple retries. Check network or try again.' };
       } else if (error.code === 'ECONNECTION') {
-        return { success: false, error: 'Connection failed. Check internet connection.' };
+        return { success: false, error: 'Connection failed after multiple retries. Check internet connection.' };
       }
       
       return { success: false, error: error.message };
@@ -174,13 +234,86 @@ class EmailService {
 
   async testConnection() {
     try {
-      await this.transporter.verify();
+      if (!this.transporter) {
+        console.log('📧 Email service not configured');
+        return false;
+      }
+
+      console.log('📧 Testing email service connection...');
+      await Promise.race([
+        this.transporter.verify(),
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Connection test timeout')), 30000)
+        )
+      ]);
       console.log('✅ Email service connection verified');
       return true;
     } catch (error) {
-      console.error('❌ Email service connection failed:', error);
+      console.error('❌ Email service connection failed:', error.message);
       return false;
     }
+  }
+
+  // Method to get connection status
+  getConnectionStatus() {
+    return {
+      configured: !!this.transporter,
+      hasCredentials: !!(process.env.GMAIL_USER && process.env.GMAIL_PASS)
+    };
+  }
+
+  // Method to create alternative transporter configurations
+  createAlternativeTransporter(configIndex = 1) {
+    if (!process.env.GMAIL_USER || !process.env.GMAIL_PASS) {
+      return null;
+    }
+
+    const smtpConfigs = [
+      {
+        host: 'smtp.gmail.com',
+        port: 587,
+        secure: false,
+        auth: {
+          user: process.env.GMAIL_USER,
+          pass: process.env.GMAIL_PASS
+        },
+        connectionTimeout: 60000,
+        greetingTimeout: 60000,
+        socketTimeout: 60000,
+        pool: false,
+        tls: {
+          rejectUnauthorized: false,
+          ciphers: 'SSLv3'
+        },
+        requireTLS: true,
+        debug: process.env.NODE_ENV === 'development',
+        logger: process.env.NODE_ENV === 'development'
+      },
+      {
+        host: 'smtp.gmail.com',
+        port: 465,
+        secure: true,
+        auth: {
+          user: process.env.GMAIL_USER,
+          pass: process.env.GMAIL_PASS
+        },
+        connectionTimeout: 60000,
+        greetingTimeout: 60000,
+        socketTimeout: 60000,
+        pool: false,
+        tls: {
+          rejectUnauthorized: false
+        },
+        debug: process.env.NODE_ENV === 'development',
+        logger: process.env.NODE_ENV === 'development'
+      }
+    ];
+
+    if (configIndex < smtpConfigs.length) {
+      console.log(`📧 Trying alternative SMTP configuration ${configIndex + 1}`);
+      return nodemailer.createTransport(smtpConfigs[configIndex]);
+    }
+    return null;
   }
 }
 

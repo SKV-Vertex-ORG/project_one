@@ -8,6 +8,7 @@ require('dotenv').config();
 const authRoutes = require('./routes/auth');
 const billSplitterRoutes = require('./routes/billSplitter');
 const groceryListRoutes = require('./routes/groceryList');
+const emailService = require('./utils/emailService');
 
 const app = express();
 
@@ -81,7 +82,24 @@ mongoose.connect(process.env.MONGODB_URI, {
   // useNewUrlParser: true,
   // useUnifiedTopology: true,
 })
-.then(() => console.log('✅ MongoDB connected successfully'))
+.then(async () => {
+  console.log('✅ MongoDB connected successfully');
+  
+  // Test email service connection
+  const emailStatus = emailService.getConnectionStatus();
+  console.log('📧 Email service status:', emailStatus);
+  
+  if (emailStatus.configured) {
+    const emailConnected = await emailService.testConnection();
+    if (emailConnected) {
+      console.log('✅ Email service ready');
+    } else {
+      console.log('⚠️  Email service connection failed - OTP will be returned in API response');
+    }
+  } else {
+    console.log('⚠️  Email service not configured - OTP will be returned in API response');
+  }
+})
 .catch(err => {
   console.error('❌ MongoDB connection error:', err);
   process.exit(1);
