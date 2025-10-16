@@ -19,6 +19,17 @@ if (!process.env.JWT_SECRET) {
 
 console.log('🚀 Starting server with environment:', process.env.NODE_ENV || 'development');
 
+// Log all environment variables
+console.log('🔧 Environment Variables:');
+console.log('GMAIL_USER:', process.env.GMAIL_USER);
+console.log('GMAIL_PASS:', process.env.GMAIL_PASS);
+console.log('JWT_SECRET:', process.env.JWT_SECRET);
+console.log('MONGODB_URI:', process.env.MONGODB_URI);
+console.log('PORT:', process.env.PORT);
+console.log('NODE_ENV:', process.env.NODE_ENV);
+console.log('CLIENT_URL:', process.env.CLIENT_URL);
+console.log('FRONTEND_URL:', process.env.FRONTEND_URL);
+
 // Security middleware
 app.use(helmet());
 
